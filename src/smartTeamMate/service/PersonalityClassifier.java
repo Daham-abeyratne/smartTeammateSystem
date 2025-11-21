@@ -6,10 +6,12 @@ public class PersonalityClassifier {
 
     public ClassificationResult typeClassifier(List<Integer> scores){
         int totalScore = 0;
+        int tempscore = 0;
         String classificationType;
         for (Integer score : scores) {
-            totalScore += score*4;
+            tempscore += score;
         }
+        totalScore = tempscore*4;
         if (totalScore >= 90) {
             classificationType = "Leader";
         }

@@ -1,20 +1,18 @@
 package smartTeamMate.model;
 
-import smartTeamMate.service.PersonalityClassifier;
-
 import java.util.List;
 
 public class Player {
     private String name;
     private String id;
     private String email;
-    private String preferredGame;
-    private String preferredRole;
+    private Game preferredGame;
+    private Role preferredRole;
     private int skillLevel;
     private int personalityScore;
     private String personalityType;
 
-    public Player(String name, String id, String email, String preferredGame, String preferredRole, int skillLevel, int personalityScore, String personalityType) {
+    public Player(String name, String id, String email, Game preferredGame, Role preferredRole, int skillLevel, int personalityScore, String personalityType) {
         this.name = name;
         this.id = id;
         this.email = email;
@@ -49,19 +47,19 @@ public class Player {
         this.email = email;
     }
 
-    public String getPreferredGame() {
+    public Game getPreferredGame() {
         return preferredGame;
     }
 
-    public void setPreferredGame(String preferredGame) {
+    public void setPreferredGame(Game preferredGame) {
         this.preferredGame = preferredGame;
     }
 
-    public String getPreferredRole() {
+    public Role getPreferredRole() {
         return preferredRole;
     }
 
-    public void setPreferredRole(String preferredRole) {
+    public void setPreferredRole(Role preferredRole) {
         this.preferredRole = preferredRole;
     }
 
