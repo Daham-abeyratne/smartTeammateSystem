@@ -3,36 +3,24 @@ package smartTeamMate.service;
 import java.util.List;
 
 public class PersonalityClassifier {
-    private int totalScore;
-    private String classificationType;
 
-    public PersonalityClassifier() {
-        this.totalScore = 0;
-        this.classificationType = "";
-    }
-
-    public int getTotalScore() {
-        return totalScore;
-    }
-
-    public String getClassificationType() {
-        return classificationType;
-    }
-
-    public String typeClassifier(List<Integer> scores){
+    public ClassificationResult typeClassifier(List<Integer> scores){
+        int totalScore = 0;
+        String classificationType;
         for (Integer score : scores) {
-            this.totalScore += score*4;
+            totalScore += score*4;
         }
-        if (this.totalScore >= 90) {
-            this.classificationType = "Leader";
+        if (totalScore >= 90) {
+            classificationType = "Leader";
         }
-        else if (this.totalScore >= 70) {
-            this.classificationType = "Balanced";
+        else if (totalScore >= 70) {
+            classificationType = "Balanced";
         }
         else{
-            this.classificationType = "Thinker";
+            classificationType = "Thinker";
         }
-        return this.classificationType;
+
+        return new ClassificationResult(totalScore, classificationType);
     }
 }
 
