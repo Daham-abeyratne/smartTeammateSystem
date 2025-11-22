@@ -86,4 +86,17 @@ public class Player {
     public void setPersonalityType(String personalityType) {
         this.personalityType = personalityType;
     }
+
+    public String toCSV() {
+        return String.join(",",
+                name,
+                id,
+                email,
+                preferredGame.name(),
+                preferredRole.name(),
+                String.valueOf(skillLevel),
+                String.valueOf(personalityScore),
+                personalityType
+        );
+    }
 }

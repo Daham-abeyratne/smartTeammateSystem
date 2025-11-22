@@ -11,11 +11,15 @@ import java.util.Scanner;
 public class SurveyValidator {
     private Scanner sc = new Scanner(System.in);
 
-    public int readInt(String message) {
+    public int skillValidator(String message) {
         while(true) {
             try {
                 System.out.println(message);
-                return Integer.parseInt(sc.nextLine());
+                int level = Integer.parseInt(sc.nextLine());
+                if(level>=1 && level<= 10) {
+                    return level;
+                }
+                System.out.println("Please enter a number between 1 and 10::");
             } catch (NumberFormatException e) {
                 System.out.println("Invalid input");
             }
@@ -69,6 +73,11 @@ public class SurveyValidator {
                 "I like making quick decisions and adapting in dynamic situations."
         );
         List<Integer> responses = new ArrayList<>();
+
+        System.out.println("=".repeat(10));
+        System.out.println("Survay");
+        System.out.println("=".repeat(10));
+
 
         for(int i = 0; i<questions.size(); i++) {
             int answer;
