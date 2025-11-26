@@ -7,9 +7,10 @@ import java.util.List;
 public class PlayerRepository {
 
     private final CSVhandler csv;
+    private final String header = "id,name,email,game,skillLevel,role,personalityScore,personalityType";
 
     public PlayerRepository(String filePath) {
-        this.csv = new CSVhandler(filePath);
+        this.csv = new CSVhandler(filePath,header);
     }
 
     // Generate next player ID
@@ -21,7 +22,7 @@ public class PlayerRepository {
     }
 
     // Save a single player
-    public void save(Player player) {
+    public void savePlayers(Player player) {
         csv.savePlayer(player);
     }
 

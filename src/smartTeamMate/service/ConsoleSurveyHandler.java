@@ -33,6 +33,6 @@ public class ConsoleSurveyHandler implements SurveyHandler {
 
         ClassificationResult result = classifier.typeClassifier(answers);
 
-        return new Player(name,id,email,preferredGame,preferredRole,skillLevel,result.getTotalScore(),result.getClassificationType());
+        return new Player(name,id,email,preferredGame,skillLevel,preferredRole,result.getTotalScore(),result.getClassificationType());
     }
 }

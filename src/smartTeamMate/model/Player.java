@@ -12,7 +12,7 @@ public class Player {
     private int personalityScore;
     private String personalityType;
 
-    public Player(String name, String id, String email, Game preferredGame, Role preferredRole, int skillLevel, int personalityScore, String personalityType) {
+    public Player(String name, String id, String email, Game preferredGame,int skillLevel, Role preferredRole, int personalityScore, String personalityType) {
         this.name = name;
         this.id = id;
         this.email = email;
@@ -89,12 +89,12 @@ public class Player {
 
     public String toCSV() {
         return String.join(",",
-                name,
                 id,
+                name,
                 email,
                 preferredGame.name(),
-                preferredRole.name(),
                 String.valueOf(skillLevel),
+                preferredRole.name(),
                 String.valueOf(personalityScore),
                 personalityType
         );

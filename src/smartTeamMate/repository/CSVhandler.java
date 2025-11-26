@@ -3,6 +3,7 @@ package smartTeamMate.repository;
 import smartTeamMate.model.Game;
 import smartTeamMate.model.Player;
 import smartTeamMate.model.Role;
+import smartTeamMate.model.Team;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -10,11 +11,11 @@ import java.util.List;
 
 public class CSVhandler {
     private final String filePath;
-    private final String HEADER =
-            "name,id,email,game,role,skillLevel,personalityScore,personalityType";
+    private final String HEADER;
 
-    public CSVhandler(String filePath) {
+    public CSVhandler(String filePath,String header) {
         this.filePath = filePath;
+        this.HEADER = header;
         ensureHeader();
     }
 
@@ -39,6 +40,15 @@ public class CSVhandler {
         }
     }
 
+    public synchronized void saveTeam(Team team) {
+        try(BufferedWriter bw = new BufferedWriter(new FileWriter(filePath,true))){
+            bw.write(team.toCSV());
+            bw.newLine();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to write CSV team", e);
+        }
+    }
+
     public String getLastPlayerID(){
         String lastLine = null;
 
@@ -55,11 +65,11 @@ public class CSVhandler {
         }
 
         // Check if we only have the header or no data
-        if(lastLine == null || lastLine.startsWith("name")){
+        if(lastLine == null || lastLine.startsWith("id")){
             return "P000";
         }
 
-        return lastLine.split(",")[1];
+        return lastLine.split(",")[0];
     }
 
     public List<Player> getPlayers(){
@@ -77,19 +87,19 @@ public class CSVhandler {
                     System.out.println("Skipped malformed line :" + line);
                     continue;
                 }
-                String name = parts[0];
-                String id = parts[1];
+                String id = parts[0];
+                String name = parts[1];
                 String email = parts[2];
-                String gametemp = parts[3].trim().toUpperCase().replace(" ", "");
-                String roletemp = parts[4].trim().toUpperCase().replace(" ", "");
-                Game game = Game.valueOf(gametemp);
-                Role role = Role.valueOf(roletemp);
-                int skillLevel = Integer.parseInt(parts[5]);
+                String prefGameTemp = parts[3].trim().toUpperCase().replace(" ", "");
+                Game game = Game.valueOf(prefGameTemp.replace(":",""));
+                int skillLevel = Integer.parseInt(parts[4]);
+                String prefRoleTemp = parts[5].trim().toUpperCase().replace(" ", "");
+                Role role = Role.valueOf(prefRoleTemp);
                 int personalityScore = Integer.parseInt(parts[6]);
                 String personalityType = parts[7];
 
 
-                Player p = new Player(name,id,email,game,role,skillLevel,personalityScore,personalityType);
+                Player p = new Player(name,id,email,game,skillLevel,role,personalityScore,personalityType);
                 players.add(p);
             }
         }catch (IOException e){
