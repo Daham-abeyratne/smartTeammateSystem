@@ -1,16 +1,16 @@
 package smartTeamMate.service;
 
-import smartTeamMate.model.Player;
 import smartTeamMate.model.Team;
-import smartTeamMate.service.TeamIssues;
 import smartTeamMate.rules.TeamRules;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.logging.Logger;
 
 public class TeamEvaluator {
 
     private final TeamRules rules;
+    private static final Logger log = Logger.getLogger(TeamEvaluator.class.getName());
 
     public TeamEvaluator(TeamRules rules) {
         this.rules = rules;
@@ -43,6 +43,7 @@ public class TeamEvaluator {
 
     // Return structured issues
     public TeamIssues evaluate(Team team) {
+        log.fine("Evaluating " + team.getName());
 
         var issues = new TeamIssues();
 
@@ -81,6 +82,11 @@ public class TeamEvaluator {
         if (roleCount.size() < rules.getMinRoles()) {
             issues.lowRoleDiversity = true;
             issues.messages.add("Role diversity too low (" + roleCount.size() + ")");
+        }
+
+        if(!issues.messages.isEmpty()) {
+            log.warning( team.getName() + " has " + issues.messages.size() + " issues");
+            log.warning(String.valueOf(issues.messages));
         }
         return issues;
     }

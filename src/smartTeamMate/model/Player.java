@@ -99,4 +99,37 @@ public class Player {
                 personalityType
         );
     }
+
+    public double[] toVector() {
+        return new double[] {
+                this.skillLevel,
+                this.personalityScore,
+                roleToIndex(this.preferredRole),
+                gameToIndex(this.preferredGame)
+        };
+    }
+
+    private int roleToIndex(Role role){
+        return switch (role){
+            case STRATEGIST -> 1;
+            case ATTACKER -> 2;
+            case DEFENDER -> 3;
+            case SUPPORTER -> 4;
+            case COORDINATOR -> 5;
+            default -> 0;
+        };
+    }
+
+    private int gameToIndex(Game game){
+        return switch (game){
+            case BASKETBALL -> 1;
+            case CHESS -> 2;
+            case CSGO -> 3;
+            case DOTA2 -> 4;
+            case FIFA -> 5;
+            case VALORANT -> 6;
+            default -> 0;
+        };
+    }
+
 }

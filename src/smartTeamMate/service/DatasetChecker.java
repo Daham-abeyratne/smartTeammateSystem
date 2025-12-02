@@ -6,8 +6,11 @@ import smartTeamMate.rules.TeamRules;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.logging.Logger;
 
 public class DatasetChecker {
+
+    private static final Logger log = Logger.getLogger(DatasetChecker.class.getName());
 
     public static void check(List<Player> players, int teamSize, TeamRules rules) {
 
@@ -26,20 +29,21 @@ public class DatasetChecker {
 
         // Personality overload check
         if (leaders > totalTeams * rules.getMaxLeaders()) {
-            System.out.println("⚠ Dataset Warning: Too many LEADERS (" + leaders +
-                    "). Cannot satisfy maxLeaders=" + rules.getMaxLeaders() + "for all the team formations");
+            System.out.println(" Dataset Warning: Too many LEADERS (" + leaders + "). Cannot satisfy maxLeaders= " + rules.getMaxLeaders() + "for all the team formations");
+            log.warning(" Dataset Warning: Too many LEADERS (" + leaders + "). Cannot satisfy maxLeaders= " + rules.getMaxLeaders() + "for all the team formations");
         }
 
         if (thinkers > totalTeams * rules.getMaxThinkers()) {
-            System.out.println("⚠ Dataset Warning: Too many THINKERS (" + thinkers +
-                    "). Cannot satisfy maxThinkers=" + rules.getMaxThinkers()+ "for all the team formations");
+            System.out.println(" Dataset Warning: Too many THINKERS (" + thinkers + "). Cannot satisfy maxThinkers=" + rules.getMaxThinkers() + "for all the team formations");
+            log.warning(" Dataset Warning: Too many THINKERS (" + thinkers + "). Cannot satisfy maxThinkers=" + rules.getMaxThinkers() + "for all the team formations");
         }
 
         // Role diversity check
         if (roleCount.size() < rules.getMinRoles()) {
-            System.out.println("⚠ Dataset Warning: Not enough unique roles to meet minimum diversity.");
-            System.out.println("   Required min roles = " + rules.getMinRoles() +
-                    ", but dataset only has " + roleCount.size());
+            System.out.println(" Dataset Warning: Not enough unique roles to meet minimum diversity.");
+            System.out.println("   Required min roles = " + rules.getMinRoles() + ", but dataset only has " + roleCount.size());
+            log.warning(" Dataset Warning: Not enough unique roles to meet minimum diversity.");
+            log.warning("   Required min roles = " + rules.getMinRoles() + ", but dataset only has " + roleCount.size());
         }
 
         // Game overload check
@@ -48,8 +52,8 @@ public class DatasetChecker {
             long count = entry.getValue();
 
             if (count > totalTeams * rules.getGameCap()) {
-                System.out.println("⚠ Dataset Warning: Too many players for game: " + game +
-                        " (" + count + ") — cannot meet gameCap=" + rules.getGameCap());
+                System.out.println(" Dataset Warning: Too many players for game: " + game + " (" + count + ") — cannot meet gameCap=" + rules.getGameCap());
+                log.warning(" Dataset Warning: Too many players for game: " + game + " (" + count + ") — cannot meet gameCap=" + rules.getGameCap());
             }
         }
 
