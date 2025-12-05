@@ -40,7 +40,7 @@ public class AppController {
         this.teamRules = new TeamRules();
         this.teamEvaluator = new TeamEvaluator(teamRules);
         this.skillBalancer = new SkillBalancer(teamEvaluator, 20,2000);
-        this.teamBuilder = new TeamBuilder(teamRules,skillBalancer,logger);
+        this.teamBuilder = new TeamBuilder(teamRules,teamEvaluator,skillBalancer);
         this.scanner = new Scanner(System.in);
         this.validator = new SurveyValidator();
         this.classifier = new PersonalityClassifier();
@@ -203,7 +203,7 @@ public class AppController {
             logger.info("User selected team size: " + teamSize);
 
             List<Team> allTeams = teamService.createTeams(allPlayers, teamSize);
-            List<Team> validTeams = teamService.getValidTeams(allTeams);
+            List<Team> validTeams = teamService.getValidTeams(allTeams,teamSize);
             logger.info("Teams created: " + validTeams.size());
 
             displayTeams(validTeams);

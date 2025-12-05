@@ -10,60 +10,72 @@ import java.util.Scanner;
 import java.util.logging.Logger;
 
 public class SurveyValidator {
+
     private final Scanner sc = new Scanner(System.in);
     private final Logger logger = Logger.getLogger(SurveyValidator.class.getName());
 
     public int skillValidator(String message) {
+        logger.fine("Starting skill validation.");
         while (true) {
             try {
                 System.out.println(message);
                 int level = Integer.parseInt(sc.nextLine());
+
                 if (level >= 1 && level <= 10) {
                     logger.info("Skill validated: " + level);
                     return level;
                 }
+
+                logger.warning("Skill input out of range: " + level);
                 System.out.println("Please enter a number between 1 and 10:");
-                logger.warning("Skill input out of range.");
+
             } catch (NumberFormatException e) {
+                logger.warning("Non-numeric skill input: " + e.getMessage());
                 System.out.println("Invalid input");
-                logger.warning("Skill input not a number: " + e.getMessage());
             }
         }
     }
 
     public Role roleValidator(String message) {
+        logger.fine("Starting role validation.");
         while (true) {
             try {
                 System.out.print(message);
-                String roleInput = sc.nextLine().toUpperCase();
+                String roleInput = sc.nextLine().trim().toUpperCase();
+
                 Role role = Role.valueOf(roleInput);
                 logger.info("Role validated: " + role);
                 return role;
+
             } catch (IllegalArgumentException e) {
+                logger.warning("Invalid role input: " + e.getMessage());
                 System.out.println("Invalid input");
                 System.out.println("Valid roles are :: STRATEGIST, ATTACKER, DEFENDER, SUPPORTER, COORDINATOR");
-                logger.warning("Invalid role input: " + e.getMessage());
             }
         }
     }
 
     public Game gameValidator(String message) {
+        logger.fine("Starting game validation.");
         while (true) {
             try {
                 System.out.print(message);
-                String gameInput = sc.nextLine().toUpperCase();
+                String gameInput = sc.nextLine().trim().toUpperCase();
+
                 Game game = Game.valueOf(gameInput);
                 logger.info("Game validated: " + game);
                 return game;
+
             } catch (IllegalArgumentException e) {
+                logger.warning("Invalid game input: " + e.getMessage());
                 System.out.println("Invalid input");
                 System.out.println("Valid games are :: BASKETBALL, CHESS, CSGO, DOTA2, FIFA, VALORANT");
-                logger.warning("Invalid game input: " + e.getMessage());
             }
         }
     }
 
     public String emailValidator(String message) {
+        logger.fine("Starting email validation.");
         while (true) {
             System.out.print(message);
             String emailInput = sc.nextLine().trim();
@@ -72,8 +84,9 @@ public class SurveyValidator {
                 logger.info("Email validated: " + emailInput);
                 return emailInput;
             }
-            System.out.println("Invalid email format. Try again.");
+
             logger.warning("Invalid email format: " + emailInput);
+            System.out.println("Invalid email format. Try again.");
         }
     }
 
@@ -85,35 +98,42 @@ public class SurveyValidator {
                 "I am calm under pressure and can help maintain team morale.",
                 "I like making quick decisions and adapting in dynamic situations."
         );
+
         List<Integer> responses = new ArrayList<>();
 
         System.out.println("=".repeat(10));
         System.out.println("Survey");
         System.out.println("=".repeat(10));
-        logger.info("Starting survey with " + questions.size() + " questions.");
+
+        logger.info("Survey started with " + questions.size() + " questions.");
 
         for (int i = 0; i < questions.size(); i++) {
             int answer;
+
             while (true) {
                 try {
                     System.out.println("Q" + (i + 1) + ") " + questions.get(i));
                     System.out.println("Rate from 1 (Strongly Disagree) to 5 (Strongly Agree)::");
+
                     answer = Integer.parseInt(sc.nextLine());
+
                     if (answer >= 1 && answer <= 5) {
                         responses.add(answer);
-                        logger.info("Response recorded for Q" + (i + 1) + ": " + answer);
+                        logger.fine("Answer recorded for Q" + (i + 1) + ": " + answer);
                         break;
                     }
+
+                    logger.warning("Invalid range for Q" + (i + 1) + ": " + answer);
                     System.out.println("Enter a number between 1 and 5");
-                    logger.warning("Survey input out of range for Q" + (i + 1) + ": " + answer);
+
                 } catch (NumberFormatException e) {
+                    logger.warning("Non-numeric survey input for Q" + (i + 1) + ": " + e.getMessage());
                     System.out.println("Invalid input");
-                    logger.warning("Invalid survey input for Q" + (i + 1) + ": " + e.getMessage());
                 }
             }
         }
 
-        logger.info("Survey completed. Responses: " + responses);
+        logger.info("Survey completed. Total responses: " + responses.size());
         return responses;
     }
 }

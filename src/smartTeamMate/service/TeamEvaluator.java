@@ -14,6 +14,7 @@ public class TeamEvaluator {
 
     public TeamEvaluator(TeamRules rules) {
         this.rules = rules;
+        log.info("TeamEvaluator initialized with rules: " + rules);
     }
 
     // Parallel evaluation
@@ -44,13 +45,13 @@ public class TeamEvaluator {
         }
 
         executor.shutdown();
-        log.info("Completed evaluation of teams.");
+        log.info("Completed evaluation of teams. Evaluated teams count: " + issuesMap.size());
         return issuesMap;
     }
 
     // Return structured issues
     public TeamIssues evaluate(Team team) {
-//        log.fine("Evaluating " + team.getName());
+        log.fine("Evaluating team: " + team.getName());
 
         var issues = new TeamIssues();
 
@@ -63,48 +64,61 @@ public class TeamEvaluator {
         if (leaders > rules.getMaxLeaders()) {
             issues.tooManyLeaders = true;
             issues.messages.add("Too many leaders (" + leaders + ")");
+            log.warning(team.getName() + " has too many leaders: " + leaders);
         }
         if (thinkers > rules.getMaxThinkers()) {
             issues.tooManyThinkers = true;
             issues.messages.add("Too many thinkers (" + thinkers + ")");
+            log.warning(team.getName() + " has too many thinkers: " + thinkers);
         }
 
-        // Check shortages (correct direction)
         if (leaders < rules.getMinLeaders()) {
             issues.notEnoughLeaders = true;
             issues.messages.add("Not enough leaders (" + leaders + ")");
+            log.warning(team.getName() + " has not enough leaders: " + leaders);
         }
         if (thinkers < rules.getMinThinkers()) {
             issues.notEnoughThinkers = true;
             issues.messages.add("Not enough thinkers (" + thinkers + ")");
+            log.warning(team.getName() + " has not enough thinkers: " + thinkers);
         }
 
         for (var entry : gameCount.entrySet()) {
             if (entry.getValue() > rules.getGameCap()) {
                 issues.tooManyGamePlayers = true;
                 issues.messages.add("Game overflow: " + entry.getKey() + " (" + entry.getValue() + ")");
+                log.warning(team.getName() + " game overflow: " + entry.getKey() + " count: " + entry.getValue());
             }
         }
 
         if (roleCount.size() < rules.getMinRoles()) {
             issues.lowRoleDiversity = true;
             issues.messages.add("Role diversity too low (" + roleCount.size() + ")");
+            log.warning(team.getName() + " role diversity too low: " + roleCount.size());
         }
 
-        if(!issues.messages.isEmpty()) {
-            log.warning( team.getName() + " has " + issues.messages.size() + " issues");
-            log.warning(String.valueOf(issues.messages));
+        if (!issues.messages.isEmpty()) {
+            log.info(team.getName() + " evaluation complete with issues: " + issues.messages);
+        } else {
+            log.info(team.getName() + " has no issues.");
         }
+
         return issues;
     }
 
     public boolean teamValidator(Team team) {
+        log.fine("Validating team: " + team.getName());
         TeamIssues issues = evaluate(team);
-        return !issues.hasIssues();
+        boolean valid = !issues.hasIssues();
+        log.fine("Team " + team.getName() + " valid: " + valid);
+        return valid;
     }
 
-    public boolean allTeamsValid(List<Team> teams){
+    public boolean allTeamsValid(List<Team> teams) {
+        log.info("Checking validity for all " + teams.size() + " teams...");
         Map<Team, TeamIssues> result = evaluateTeams(teams);
-        return result.values().stream().noneMatch(TeamIssues::hasIssues);
+        boolean allValid = result.values().stream().noneMatch(TeamIssues::hasIssues);
+        log.info("All teams valid: " + allValid);
+        return allValid;
     }
 }

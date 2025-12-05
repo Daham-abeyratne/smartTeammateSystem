@@ -16,36 +16,48 @@ public class DatasetChecker {
     public DatasetChecker(TeamRules rules, Logger log) {
         this.rules = rules;
         this.log = log;
+        log.fine("DatasetChecker initialized with TeamRules.");
     }
 
     /**
      * Checks the dataset and returns a list of warnings.
      */
     public List<String> check(List<Player> players, int teamSize) {
+        log.info("Starting dataset check. Players: " + players.size() + ", Team size: " + teamSize);
+
         List<String> warnings = new ArrayList<>();
         int totalTeams = (int) Math.ceil(players.size() / (double) teamSize);
+
+        log.fine("Calculated total teams: " + totalTeams);
 
         warnings.addAll(checkPersonality(players, totalTeams));
         warnings.addAll(checkRoles(players));
         warnings.addAll(checkGames(players, totalTeams));
 
-        // Log all warnings
-        for (String warning : warnings) {
-            log.warning(warning);
+        if (warnings.isEmpty()) {
+            log.info("Dataset check completed: no warnings.");
+        } else {
+            log.warning("Dataset check found " + warnings.size() + " warning(s).");
+            warnings.forEach(log::warning);
         }
 
         return warnings;
     }
 
     private List<String> checkPersonality(List<Player> players, int totalTeams) {
+        log.fine("Checking personality distribution...");
+
         List<String> warnings = new ArrayList<>();
 
         long leaders = players.stream()
                 .filter(p -> "Leader".equalsIgnoreCase(p.getPersonalityType()))
                 .count();
+
         long thinkers = players.stream()
                 .filter(p -> "Thinker".equalsIgnoreCase(p.getPersonalityType()))
                 .count();
+
+        log.fine("Leaders: " + leaders + ", Thinkers: " + thinkers);
 
         if (leaders > totalTeams * rules.getMaxLeaders()) {
             warnings.add(String.format(
@@ -65,12 +77,16 @@ public class DatasetChecker {
     }
 
     private List<String> checkRoles(List<Player> players) {
+        log.fine("Checking role diversity...");
+
         List<String> warnings = new ArrayList<>();
 
         long uniqueRoles = players.stream()
                 .map(Player::getPreferredRole)
                 .distinct()
                 .count();
+
+        log.fine("Unique roles found: " + uniqueRoles);
 
         if (uniqueRoles < rules.getMinRoles()) {
             warnings.add(String.format(
@@ -83,6 +99,8 @@ public class DatasetChecker {
     }
 
     private List<String> checkGames(List<Player> players, int totalTeams) {
+        log.fine("Checking game distribution...");
+
         List<String> warnings = new ArrayList<>();
 
         Map<String, Long> gameCount = players.stream()
@@ -90,6 +108,8 @@ public class DatasetChecker {
                         p -> p.getPreferredGame().name(),
                         Collectors.counting()
                 ));
+
+        log.fine("Game distribution: " + gameCount);
 
         for (var entry : gameCount.entrySet()) {
             String game = entry.getKey();

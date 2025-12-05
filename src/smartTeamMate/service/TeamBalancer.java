@@ -38,39 +38,55 @@ public class TeamBalancer {
         this.rules = rules;
         this.logger = logger;
         this.maxIterations = Math.max(100, 5 * teamSize * 6);
+
+        logger.info("TeamBalancer initialized. Max iterations: " + maxIterations);
     }
 
     /** Main method: balance teams */
     public List<Team> balance(List<Team> teams) {
-        if (teams == null || teams.isEmpty()) return teams;
+        if (teams == null || teams.isEmpty()) {
+            logger.warning("No teams provided to TeamBalancer. Returning input as-is.");
+            return teams;
+        }
+
+        logger.info("TeamBalancer started. Team count: " + teams.size());
 
         double currentScore = calculateTotalImbalance(teams);
-        int iter = 0;
+        logger.info("Initial imbalance score: " + String.format("%.2f", currentScore));
 
-        logger.info("TeamBalancer start - initial score: " + String.format("%.2f", currentScore));
+        int iter = 0;
 
         while (iter++ < maxIterations) {
 
             if (evaluator.allTeamsValid(teams)) {
-                logger.info("All teams valid at iteration " + iter);
+                logger.info("All teams valid at iteration " + iter + ". Balancing complete.");
                 break;
             }
 
+            logger.fine("Iteration " + iter + " - searching for best swap...");
+
             Optional<SwapCandidate> opt = findBestSwap(teams, currentScore);
+
             if (!opt.isPresent()) {
-                logger.info("No improving swap found at iteration " + iter);
+                logger.info("No improving swap found at iteration " + iter + ". Stopping.");
                 break;
             }
 
             SwapCandidate best = opt.get();
 
-            // Apply only if still valid
+            logger.fine("Applying best swap with new imbalance score: "
+                    + String.format("%.2f", best.getNewImbalance()));
+
             if (best.applyIfStillValid(evaluator)) {
                 currentScore = best.getNewImbalance();
+                logger.fine("Swap applied successfully. Updated score: "
+                        + String.format("%.2f", currentScore));
+            } else {
+                logger.fine("Swap became invalid before applying — skipped.");
             }
         }
 
-        logger.info("TeamBalancer finished after " + iter + " iterations. Score: "
+        logger.info("TeamBalancer finished after " + iter + " iterations. Final score: "
                 + String.format("%.2f", currentScore));
 
         return teams;
@@ -78,6 +94,8 @@ public class TeamBalancer {
 
     /** Total imbalance calculation */
     private double calculateTotalImbalance(List<Team> teams) {
+        logger.fine("Calculating total imbalance for teams...");
+
         double score = 0.0;
 
         for (Team t : teams) {
@@ -90,6 +108,8 @@ public class TeamBalancer {
         }
 
         score += skillImbalancePenalty(teams);
+
+        logger.fine("Total imbalance calculated: " + score);
         return score;
     }
 
@@ -110,28 +130,32 @@ public class TeamBalancer {
                 .summaryStatistics();
 
         double range = stat.getMax() - stat.getMin();
-        return range > 1.0 ? (range - 1.0) * WEIGHT_SKILL_IMBALANCE_PER_POINT * teams.size() : 0.0;
+        double penalty = range > 1.0
+                ? (range - 1.0) * WEIGHT_SKILL_IMBALANCE_PER_POINT * teams.size()
+                : 0.0;
+
+        logger.fine("Skill imbalance penalty computed: " + penalty);
+        return penalty;
     }
 
     /** Find the best swap among all team pairs */
     private Optional<SwapCandidate> findBestSwap(List<Team> teams, double currentImbalance) {
+        logger.fine("Searching best swap among all team pairs...");
+
         SwapCandidate best = null;
         double bestScore = currentImbalance;
 
         int n = teams.size();
+
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
 
                 Team t1 = teams.get(i);
                 Team t2 = teams.get(j);
 
-                List<Player> members1 = t1.getMembers();
-                List<Player> members2 = t2.getMembers();
+                for (Player p1 : t1.getMembers()) {
+                    for (Player p2 : t2.getMembers()) {
 
-                for (Player p1 : members1) {
-                    for (Player p2 : members2) {
-
-                        // SwapCandidate uses snapshots internally
                         SwapCandidate cand = new SwapCandidate(t1, t2, p1, p2, teams, this);
 
                         if (!cand.simulationKeepsValidator(evaluator)) continue;
@@ -143,6 +167,12 @@ public class TeamBalancer {
                     }
                 }
             }
+        }
+
+        if (best != null) {
+            logger.fine("Best swap found with new score: " + bestScore);
+        } else {
+            logger.fine("No improving swap found.");
         }
 
         return Optional.ofNullable(best);
@@ -163,7 +193,7 @@ public class TeamBalancer {
             this.p1 = p1;
             this.p2 = p2;
 
-            // Create snapshot lists
+            // Snapshots
             List<Player> t1Snap = new ArrayList<>(t1.getMembers());
             List<Player> t2Snap = new ArrayList<>(t2.getMembers());
 
@@ -187,24 +217,24 @@ public class TeamBalancer {
 
         /** Apply swap safely using Team.swapPlayers */
         boolean applyIfStillValid(TeamEvaluator evaluator) {
-            if (!t1.getMembers().contains(p1) || !t2.getMembers().contains(p2))
+            if (!t1.getMembers().contains(p1) || !t2.getMembers().contains(p2)) {
                 return false;
+            }
 
             t1.swapPlayers(p1, p2);
             t2.swapPlayers(p2, p1);
 
             boolean ok = evaluator.teamValidator(t1) && evaluator.teamValidator(t2);
+
             if (!ok) {
-                // Revert
                 t1.swapPlayers(p2, p1);
                 t2.swapPlayers(p1, p2);
-                return false;
             }
 
-            return true;
+            return ok;
         }
 
-        /** Simulate swap on temporary teams without mutating real teams */
+        /** Simulate swap on temporary teams */
         boolean simulationKeepsValidator(TeamEvaluator evaluator) {
             Team s1 = new Team("sim1");
             for (Player pl : t1.getMembers())

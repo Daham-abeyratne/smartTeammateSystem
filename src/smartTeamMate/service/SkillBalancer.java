@@ -6,6 +6,7 @@ import smartTeamMate.model.Team;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
+import java.util.logging.Logger;
 
 /**
  * SkillBalancer (Final Version)
@@ -21,25 +22,40 @@ public class SkillBalancer {
     private final int threadCount;
     private final int attemptLimit;
     private final ExecutorService exec;
+    private static final Logger log = Logger.getLogger(SkillBalancer.class.getName());
 
     public SkillBalancer(TeamEvaluator evaluator, int threadCount, int attemptLimit) {
         this.evaluator = evaluator;
         this.threadCount = Math.max(1, threadCount);
         this.attemptLimit = Math.max(200, attemptLimit);
         this.exec = Executors.newFixedThreadPool(this.threadCount);
+
+        log.info("SkillBalancer initialized with " + this.threadCount +
+                " threads and attempt limit " + this.attemptLimit);
     }
 
     /**
      * Tightens skill averages across the teams.
      */
     public List<Team> tightenValidTeamSkills(List<Team> teams, double maxRange, boolean stopEarly) {
-        if (teams == null || teams.size() < 2) return teams;
+
+        if (teams == null || teams.size() < 2) {
+            log.warning("Not enough teams to balance. Returning input.");
+            return teams;
+        }
+
+        log.info("Starting skill tightening process for " + teams.size() + " teams.");
 
         try {
             for (int attempt = 0; attempt < attemptLimit; attempt++) {
 
                 double range = getSkillRange(teams);
-                if (stopEarly && range <= maxRange) break;
+                log.fine("Attempt " + attempt + " | Current skill range: " + range);
+
+                if (stopEarly && range <= maxRange) {
+                    log.info("Stopping early: skill range target met (" + range + " <= " + maxRange + ")");
+                    break;
+                }
 
                 // Submit parallel tasks
                 List<Future<Boolean>> futures = new ArrayList<>();
@@ -47,17 +63,21 @@ public class SkillBalancer {
                     futures.add(exec.submit(() -> tryRandomSwapBatch(teams)));
                 }
 
-                // If ANY worker returns true → improvement happened → continue outer loop
                 boolean improved = false;
                 for (Future<Boolean> f : futures) {
                     if (f.get()) improved = true;
                 }
 
-                // If no worker improved → best we can do
-                if (!improved) break;
+                if (!improved) {
+                    log.info("No improvement from any thread — balancing converged.");
+                    break;
+                }
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            log.warning("Skill tightening encountered an exception: " + e.getMessage());
         }
+
+        log.info("Skill tightening completed. Final skill range: " + getSkillRange(teams));
         return teams;
     }
 
@@ -65,12 +85,15 @@ public class SkillBalancer {
      * A worker performs 20 random swap attempts.
      */
     private boolean tryRandomSwapBatch(List<Team> teams) {
-        boolean improved = false;
-
         final Random r = ThreadLocalRandom.current();
+        boolean improved = false;
 
         for (int i = 0; i < 20; i++) {
             if (tryRandomSwap(teams, r)) improved = true;
+        }
+
+        if (improved) {
+            log.fine("Worker thread achieved improvement.");
         }
 
         return improved;
@@ -86,22 +109,19 @@ public class SkillBalancer {
         Team t2 = teams.get(r.nextInt(teams.size()));
         if (t1 == t2) return false;
 
-        if (t1.getMembers() .isEmpty() || t2.getMembers() .isEmpty()) return false;
+        if (t1.getMembers().isEmpty() || t2.getMembers().isEmpty()) return false;
 
-        Player p1 = t1.getMembers() .get(r.nextInt(t1.getMembers() .size()));
-        Player p2 = t2.getMembers() .get(r.nextInt(t2.getMembers() .size()));
+        Player p1 = t1.getMembers().get(r.nextInt(t1.getMembers().size()));
+        Player p2 = t2.getMembers().get(r.nextInt(t2.getMembers().size()));
 
         // must match personality
         if (!p1.getPersonalityType().equalsIgnoreCase(p2.getPersonalityType())) return false;
 
         double before = Math.abs(t1.getTotalSkillAvg() - t2.getTotalSkillAvg());
 
-        // swap
         synchronized (this) {
-            t1.getMembers() .remove(p1);
-            t2.getMembers() .remove(p2);
-            t1.getMembers() .add(p2);
-            t2.getMembers() .add(p1);
+            t1.swapPlayers(p1,p2);
+            t2.swapPlayers(p2,p1);
         }
 
         double after = Math.abs(t1.getTotalSkillAvg() - t2.getTotalSkillAvg());
@@ -109,15 +129,14 @@ public class SkillBalancer {
         // If swap is worse, revert
         if (after > before) {
             synchronized (this) {
-                t1.getMembers() .remove(p2);
-                t2.getMembers() .remove(p1);
-                t1.getMembers() .add(p1);
-                t2.getMembers() .add(p2);
+                t1.swapPlayers(p2,p1);
+                t2.swapPlayers(p1,p2);
             }
             return false;
         }
 
-        return true; // improvement
+        log.fine("Swap improved skill difference: " + before + " → " + after);
+        return true;
     }
 
     private double getSkillRange(List<Team> teams) {
@@ -128,6 +147,7 @@ public class SkillBalancer {
     }
 
     public void shutdown() {
+        log.info("Shutting down SkillBalancer executor service.");
         exec.shutdown();
     }
 }
