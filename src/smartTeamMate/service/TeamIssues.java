@@ -2,8 +2,10 @@ package smartTeamMate.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 
 public class TeamIssues {
+    private static final Logger log = Logger.getLogger(TeamIssues.class.getName());
     public boolean tooManyLeaders = false;
     public boolean notEnoughLeaders = false;
     public boolean tooManyThinkers = false;
@@ -19,8 +21,14 @@ public class TeamIssues {
 
     public boolean hasUnsolvableIssue() {
         // If both shortages and excess exist at the same time → impossible
-        if (tooManyLeaders && notEnoughLeaders) return true;
-        if (tooManyThinkers && notEnoughThinkers) return true;
+        if (tooManyLeaders && notEnoughLeaders){
+            log.warning("Unsolvable issue detected: both too many and not enough leaders");
+            return true;
+        }
+        if (tooManyThinkers && notEnoughThinkers){
+            log.warning("Unsolvable issue detected: both too many and not enough thinkers");
+            return true;
+        }
 
         // Role diversity and game overflow are NOT unsolvable by themselves
         // They can be fixed through swapping, so return false

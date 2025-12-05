@@ -6,59 +6,90 @@ import java.util.stream.Collectors;
 public class Team {
 
     private String name;
-    private List<Player> members = new ArrayList<>();
+    private final List<Player> members = new ArrayList<>();
 
     public Team(String name) {
         this.name = name;
     }
 
+    /** Add a member */
     public void addMember(Player p) {
         members.add(p);
     }
 
+    /** Swap members safely */
+    public void swapPlayers(Player out, Player in) {
+        members.remove(out);
+        members.add(in);
+    }
+
+    /** Get team name */
     public String getName() {
         return name;
+    }
+
+    public void setName(String newName) {
+        this.name = newName;
+    }
+
+    /** Read-only snapshot of members for evaluation/statistics */
+    public List<Player> getMembersReadOnly() {
+        return Collections.unmodifiableList(new ArrayList<>(members));
+    }
+
+    /** Internal safe copy for streams if needed */
+    public List<Player> getMembersSnapshot() {
+        return new ArrayList<>(members);
     }
 
     public List<Player> getMembers() {
         return members;
     }
 
+    /** Average skill */
     public float getTotalSkillAvg() {
-        return ((float) members.stream().mapToInt(Player::getSkillLevel).sum() /members.size());
+        List<Player> snapshot = getMembersSnapshot();
+        return snapshot.isEmpty() ? 0f :
+                (float) snapshot.stream().mapToInt(Player::getSkillLevel).sum() / snapshot.size();
     }
 
+    /** Count roles */
     public Map<Role, Long> getRoleCount() {
-        return members.stream().collect(Collectors.groupingBy(Player::getPreferredRole, Collectors.counting()));
+        return getMembersSnapshot().stream()
+                .collect(Collectors.groupingBy(Player::getPreferredRole, Collectors.counting()));
     }
 
+    /** Count games */
     public Map<Game, Long> getGameCount() {
-        return members.stream().collect(Collectors.groupingBy(p -> p.getPreferredGame(), Collectors.counting()));
+        return getMembersSnapshot().stream()
+                .collect(Collectors.groupingBy(Player::getPreferredGame, Collectors.counting()));
     }
 
+    /** Count by personality */
     public long countByPersonality(String personality) {
-        return members.stream()
+        return getMembersSnapshot().stream()
                 .filter(p -> p.getPersonalityType().equalsIgnoreCase(personality))
                 .count();
     }
 
+    /** Summaries */
     @Override
     public String toString() {
-        String memberNames = members.stream()
+        return " [" + getMembersSnapshot().stream()
                 .map(Player::getName)
-                .collect(Collectors.joining(", "));
-
-        return " [" + memberNames + "]";
+                .collect(Collectors.joining(", ")) + "]";
     }
 
     public String roleSummary() {
-        Map<Role, Long> roleCount = getRoleCount();
-        return roleCount.entrySet().stream().map(e -> e.getKey() + ": " + e.getValue()).collect(Collectors.joining(", "));
+        return getRoleCount().entrySet().stream()
+                .map(e -> e.getKey() + ": " + e.getValue())
+                .collect(Collectors.joining(", "));
     }
 
     public String gameSummary() {
-        Map<Game, Long> gameCount = getGameCount();
-        return gameCount.entrySet().stream().map(e -> e.getKey() + ": " + e.getValue()).collect(Collectors.joining(", "));
+        return getGameCount().entrySet().stream()
+                .map(e -> e.getKey() + ": " + e.getValue())
+                .collect(Collectors.joining(", "));
     }
 
     public String roleSummaryCSV() {
@@ -74,13 +105,12 @@ public class Team {
     }
 
     public String memberListCSV() {
-        return members.stream()
+        return getMembersSnapshot().stream()
                 .map(Player::getId)
                 .collect(Collectors.joining("|"));
     }
 
     public String getStatsSummary() {
-
         long leaders = countByPersonality("Leader");
         long thinkers = countByPersonality("Thinker");
         long balanced = countByPersonality("Balanced");
@@ -93,7 +123,7 @@ public class Team {
                 "\nBalanced: " + balanced +
                 "\nRoles -> " + roleSummary() +
                 "\nGames -> " + gameSummary() +
-                "\nMembers -> "+ toString() +"\n";
+                "\nMembers -> " + toString() + "\n";
     }
 
     public String toCSV() {
@@ -109,5 +139,4 @@ public class Team {
                 memberListCSV()
         );
     }
-
 }

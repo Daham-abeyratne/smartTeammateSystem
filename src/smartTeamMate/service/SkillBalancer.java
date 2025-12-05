@@ -8,191 +8,126 @@ import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 /**
- * Optimized SkillBalancer B2
+ * SkillBalancer (Final Version)
  *
- * - Only balances VALID teams
- * - Ensures no rule is broken after swap
- * - Uses multi-threading for evaluating pairs
- * - Avoids unnecessary object creation
- * - Stops when target skill range reached
+ * - Multi-threaded skill tightening
+ * - Tries randomized same-personality swaps
+ * - Faster convergence using parallel workers
+ * - Does NOT violate TeamRules (because TeamBalancer checks that)
  */
 public class SkillBalancer {
 
     private final TeamEvaluator evaluator;
-    private final ExecutorService executor;
-    private final int maxIterations;
+    private final int threadCount;
+    private final int attemptLimit;
+    private final ExecutorService exec;
 
-    public SkillBalancer(TeamEvaluator evaluator, int threadCount, int maxIterations) {
+    public SkillBalancer(TeamEvaluator evaluator, int threadCount, int attemptLimit) {
         this.evaluator = evaluator;
-        this.executor = Executors.newFixedThreadPool(Math.max(1, threadCount));
-        this.maxIterations = maxIterations;
+        this.threadCount = Math.max(1, threadCount);
+        this.attemptLimit = Math.max(200, attemptLimit);
+        this.exec = Executors.newFixedThreadPool(this.threadCount);
     }
 
     /**
-     * @param teams                    list of all teams
-     * @param targetRange              ex: 0.5
-     * @param strictMatchRolesAndGames true = require same role+game+personality
+     * Tightens skill averages across the teams.
      */
-    public void balanceValidTeams(List<Team> teams, double targetRange, boolean strictMatchRolesAndGames) {
+    public List<Team> tightenValidTeamSkills(List<Team> teams, double maxRange, boolean stopEarly) {
+        if (teams == null || teams.size() < 2) return teams;
 
+        try {
+            for (int attempt = 0; attempt < attemptLimit; attempt++) {
 
-        for (int iter = 0; iter < maxIterations; iter++) {
+                double range = getSkillRange(teams);
+                if (stopEarly && range <= maxRange) break;
 
-            // refresh valid teams
-            List<Team> validTeams = teams.stream().filter(evaluator::teamValidator).collect(Collectors.toList());
-
-            if (validTeams.size() < 2) return;
-
-            double range = computeRange(validTeams);
-            if (range <= targetRange) break;
-
-            // Create tasks for team pairs
-            List<Callable<SwapCandidate>> tasks = new ArrayList<>();
-
-            for (int i = 0; i < validTeams.size(); i++) {
-                for (int j = i + 1; j < validTeams.size(); j++) {
-                    Team A = validTeams.get(i);
-                    Team B = validTeams.get(j);
-
-                    tasks.add(() -> evaluateTeamPair(A, B, validTeams, strictMatchRolesAndGames));
+                // Submit parallel tasks
+                List<Future<Boolean>> futures = new ArrayList<>();
+                for (int i = 0; i < threadCount; i++) {
+                    futures.add(exec.submit(() -> tryRandomSwapBatch(teams)));
                 }
+
+                // If ANY worker returns true → improvement happened → continue outer loop
+                boolean improved = false;
+                for (Future<Boolean> f : futures) {
+                    if (f.get()) improved = true;
+                }
+
+                // If no worker improved → best we can do
+                if (!improved) break;
             }
+        } catch (Exception ignored) {
+        }
+        return teams;
+    }
 
-            // execute in parallel
-            List<Future<SwapCandidate>> futures;
-            try { futures = executor.invokeAll(tasks); }
-            catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+    /**
+     * A worker performs 20 random swap attempts.
+     */
+    private boolean tryRandomSwapBatch(List<Team> teams) {
+        boolean improved = false;
 
-            // pick best swap
-            SwapCandidate best = null;
-            for (Future<SwapCandidate> f : futures) {
-                try {
-                    SwapCandidate cand = f.get();
-                    if (cand == null) continue;
-                    if (best == null || cand.newRange < best.newRange) best = cand;
-                } catch (Exception ignored) {}
-            }
+        final Random r = ThreadLocalRandom.current();
 
-            if (best == null) break;
-            if (best.newRange >= range) break;
+        for (int i = 0; i < 20; i++) {
+            if (tryRandomSwap(teams, r)) improved = true;
+        }
 
-            // Apply swap safely
+        return improved;
+    }
+
+    /**
+     * Try random swap between two teams.
+     */
+    private boolean tryRandomSwap(List<Team> teams, Random r) {
+        if (teams.size() < 2) return false;
+
+        Team t1 = teams.get(r.nextInt(teams.size()));
+        Team t2 = teams.get(r.nextInt(teams.size()));
+        if (t1 == t2) return false;
+
+        if (t1.getMembers() .isEmpty() || t2.getMembers() .isEmpty()) return false;
+
+        Player p1 = t1.getMembers() .get(r.nextInt(t1.getMembers() .size()));
+        Player p2 = t2.getMembers() .get(r.nextInt(t2.getMembers() .size()));
+
+        // must match personality
+        if (!p1.getPersonalityType().equalsIgnoreCase(p2.getPersonalityType())) return false;
+
+        double before = Math.abs(t1.getTotalSkillAvg() - t2.getTotalSkillAvg());
+
+        // swap
+        synchronized (this) {
+            t1.getMembers() .remove(p1);
+            t2.getMembers() .remove(p2);
+            t1.getMembers() .add(p2);
+            t2.getMembers() .add(p1);
+        }
+
+        double after = Math.abs(t1.getTotalSkillAvg() - t2.getTotalSkillAvg());
+
+        // If swap is worse, revert
+        if (after > before) {
             synchronized (this) {
-                if (stillValid(best)) {
-                    doSwap(best);
-                }
+                t1.getMembers() .remove(p2);
+                t2.getMembers() .remove(p1);
+                t1.getMembers() .add(p1);
+                t2.getMembers() .add(p2);
             }
+            return false;
         }
 
+        return true; // improvement
     }
 
-    private boolean stillValid(SwapCandidate c) {
-        return c.teamA.getMembers().contains(c.playerA) && c.teamB.getMembers().contains(c.playerB) && evaluator.teamValidator(c.teamA) && evaluator.teamValidator(c.teamB);
+    private double getSkillRange(List<Team> teams) {
+        DoubleSummaryStatistics stat = teams.stream()
+                .mapToDouble(Team::getTotalSkillAvg)
+                .summaryStatistics();
+        return stat.getMax() - stat.getMin();
     }
 
-    private double computeRange(List<Team> teams) {
-        var stats = teams.stream().mapToDouble(Team::getTotalSkillAvg).summaryStatistics();
-        return stats.getMax() - stats.getMin();
-    }
-
-    /**
-     * Best swap between 2 teams
-     */
-    private SwapCandidate evaluateTeamPair(Team A, Team B, List<Team> validSnapshot, boolean strict) {
-
-        double baseRange = computeRange(validSnapshot);
-
-        List<Player> aPlayers = new ArrayList<>(A.getMembers());
-        List<Player> bPlayers = new ArrayList<>(B.getMembers());
-
-        SwapCandidate best = null;
-
-        for (Player pa : aPlayers) {
-            for (Player pb : bPlayers) {
-
-                // Must match personality
-                if (!pa.getPersonalityType().equalsIgnoreCase(pb.getPersonalityType()))
-                    continue;
-
-                if (strict) {
-                    if (!pa.getPreferredRole().equals(pb.getPreferredRole())) continue;
-                    if (!pa.getPreferredGame().equals(pb.getPreferredGame())) continue;
-                }
-
-                // simulate on original teams (small cost)
-                double newAvgA = simulateAvg(A, pa, pb);
-                double newAvgB = simulateAvg(B, pb, pa);
-
-                // must keep both valid
-                if (!simValid(A, pa, pb) || !simValid(B, pb, pa)) continue;
-
-                // compute updated range
-                double newRange = computeRangeAfter(validSnapshot, A, B, newAvgA, newAvgB);
-
-                if (newRange < baseRange) {
-                    if (best == null || newRange < best.newRange)
-                        best = new SwapCandidate(A, B, pa, pb, newRange);
-                }
-            }
-        }
-        return best;
-    }
-
-    private boolean simValid(Team team, Player out, Player in) {
-        Team sim = new Team("X");
-        for (Player p : team.getMembers()) if (!p.equals(out)) sim.addMember(p);
-        sim.addMember(in);
-        return evaluator.teamValidator(sim);
-    }
-
-    private double simulateAvg(Team team, Player out, Player in) {
-        int total = 0;
-        for (Player p : team.getMembers()) total += p.getSkillLevel();
-        total = total - out.getSkillLevel() + in.getSkillLevel();
-        return total / (double) team.getMembers().size();
-    }
-
-    private double computeRangeAfter(List<Team> snapshot,
-                                     Team A, Team B,
-                                     double newAvgA, double newAvgB) {
-
-        double min = Double.MAX_VALUE, max = -1;
-
-        for (Team t : snapshot) {
-            double val;
-            if (t == A) val = newAvgA;
-            else if (t == B) val = newAvgB;
-            else val = t.getTotalSkillAvg();
-
-            min = Math.min(min, val);
-            max = Math.max(max, val);
-        }
-
-        return max - min;
-    }
-
-    private void doSwap(SwapCandidate c) {
-        c.teamA.getMembers().remove(c.playerA);
-        c.teamA.getMembers().add(c.playerB);
-
-        c.teamB.getMembers().remove(c.playerB);
-        c.teamB.getMembers().add(c.playerA);
-    }
-
-    public void shutdown() { executor.shutdownNow(); }
-
-    private static class SwapCandidate {
-        final Team teamA, teamB;
-        final Player playerA, playerB;
-        final double newRange;
-
-        SwapCandidate(Team A, Team B, Player a, Player b, double r) {
-            this.teamA = A; this.teamB = B;
-            this.playerA = a; this.playerB = b;
-            this.newRange = r;
-        }
+    public void shutdown() {
+        exec.shutdown();
     }
 }

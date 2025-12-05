@@ -4,8 +4,8 @@ import smartTeamMate.config.LoggingConfig;
 
 public class Main {
     public static void main(String[] args) {
-        AppController app = new AppController();
         LoggingConfig.setup();
+        AppController app = new AppController();
 
         app.run();
     }

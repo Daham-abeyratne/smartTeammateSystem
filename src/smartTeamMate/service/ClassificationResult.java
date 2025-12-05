@@ -16,4 +16,12 @@ public class ClassificationResult {
     public String getClassificationType() {
         return classificationType;
     }
+
+    @Override
+    public String toString() {
+        return "ClassificationResult{" +
+                "totalScore=" + totalScore +
+                ", classificationType='" + classificationType + '\'' +
+                '}';
+    }
 }

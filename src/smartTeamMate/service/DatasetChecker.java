@@ -5,58 +5,104 @@ import smartTeamMate.model.Role;
 import smartTeamMate.rules.TeamRules;
 
 import java.util.*;
-import java.util.stream.Collectors;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class DatasetChecker {
 
-    private static final Logger log = Logger.getLogger(DatasetChecker.class.getName());
+    private final TeamRules rules;
+    private final Logger log;
 
-    public static void check(List<Player> players, int teamSize, TeamRules rules) {
+    public DatasetChecker(TeamRules rules, Logger log) {
+        this.rules = rules;
+        this.log = log;
+    }
 
+    /**
+     * Checks the dataset and returns a list of warnings.
+     */
+    public List<String> check(List<Player> players, int teamSize) {
+        List<String> warnings = new ArrayList<>();
         int totalTeams = (int) Math.ceil(players.size() / (double) teamSize);
 
-        long leaders = players.stream().filter(p -> p.getPersonalityType().equalsIgnoreCase("Leader")).count();
-        long thinkers = players.stream().filter(p -> p.getPersonalityType().equalsIgnoreCase("Thinker")).count();
+        warnings.addAll(checkPersonality(players, totalTeams));
+        warnings.addAll(checkRoles(players));
+        warnings.addAll(checkGames(players, totalTeams));
 
-        Map<Role, Long> roleCount = players.stream()
-                .collect(Collectors.groupingBy(Player::getPreferredRole, Collectors.counting()));
+        // Log all warnings
+        for (String warning : warnings) {
+            log.warning(warning);
+        }
 
-        Map<String, Long> gameCount = players.stream()
-                .collect(Collectors.groupingBy(p -> p.getPreferredGame().name(), Collectors.counting()));
+        return warnings;
+    }
 
-        System.out.println("\n===== DATASET CHECKER =====");
+    private List<String> checkPersonality(List<Player> players, int totalTeams) {
+        List<String> warnings = new ArrayList<>();
 
-        // Personality overload check
+        long leaders = players.stream()
+                .filter(p -> "Leader".equalsIgnoreCase(p.getPersonalityType()))
+                .count();
+        long thinkers = players.stream()
+                .filter(p -> "Thinker".equalsIgnoreCase(p.getPersonalityType()))
+                .count();
+
         if (leaders > totalTeams * rules.getMaxLeaders()) {
-            System.out.println(" Dataset Warning: Too many LEADERS (" + leaders + "). Cannot satisfy maxLeaders= " + rules.getMaxLeaders() + "for all the team formations");
-            log.warning(" Dataset Warning: Too many LEADERS (" + leaders + "). Cannot satisfy maxLeaders= " + rules.getMaxLeaders() + "for all the team formations");
+            warnings.add(String.format(
+                    "Too many LEADERS (%d). Max per team: %d",
+                    leaders, rules.getMaxLeaders()
+            ));
         }
 
         if (thinkers > totalTeams * rules.getMaxThinkers()) {
-            System.out.println(" Dataset Warning: Too many THINKERS (" + thinkers + "). Cannot satisfy maxThinkers=" + rules.getMaxThinkers() + "for all the team formations");
-            log.warning(" Dataset Warning: Too many THINKERS (" + thinkers + "). Cannot satisfy maxThinkers=" + rules.getMaxThinkers() + "for all the team formations");
+            warnings.add(String.format(
+                    "Too many THINKERS (%d). Max per team: %d",
+                    thinkers, rules.getMaxThinkers()
+            ));
         }
 
-        // Role diversity check
-        if (roleCount.size() < rules.getMinRoles()) {
-            System.out.println(" Dataset Warning: Not enough unique roles to meet minimum diversity.");
-            System.out.println("   Required min roles = " + rules.getMinRoles() + ", but dataset only has " + roleCount.size());
-            log.warning(" Dataset Warning: Not enough unique roles to meet minimum diversity.");
-            log.warning("   Required min roles = " + rules.getMinRoles() + ", but dataset only has " + roleCount.size());
+        return warnings;
+    }
+
+    private List<String> checkRoles(List<Player> players) {
+        List<String> warnings = new ArrayList<>();
+
+        long uniqueRoles = players.stream()
+                .map(Player::getPreferredRole)
+                .distinct()
+                .count();
+
+        if (uniqueRoles < rules.getMinRoles()) {
+            warnings.add(String.format(
+                    "Not enough unique roles. Required: %d, found: %d",
+                    rules.getMinRoles(), uniqueRoles
+            ));
         }
 
-        // Game overload check
+        return warnings;
+    }
+
+    private List<String> checkGames(List<Player> players, int totalTeams) {
+        List<String> warnings = new ArrayList<>();
+
+        Map<String, Long> gameCount = players.stream()
+                .collect(Collectors.groupingBy(
+                        p -> p.getPreferredGame().name(),
+                        Collectors.counting()
+                ));
+
         for (var entry : gameCount.entrySet()) {
             String game = entry.getKey();
             long count = entry.getValue();
 
             if (count > totalTeams * rules.getGameCap()) {
-                System.out.println(" Dataset Warning: Too many players for game: " + game + " (" + count + ") — cannot meet gameCap=" + rules.getGameCap());
-                log.warning(" Dataset Warning: Too many players for game: " + game + " (" + count + ") — cannot meet gameCap=" + rules.getGameCap());
+                warnings.add(String.format(
+                        "Too many players for game '%s' (%d). Max per team: %d",
+                        game, count, rules.getGameCap()
+                ));
             }
         }
 
-        System.out.println("===== END DATASET CHECK =====\n");
+        return warnings;
     }
 }

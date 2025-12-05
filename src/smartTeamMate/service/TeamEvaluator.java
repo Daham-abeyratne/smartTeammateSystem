@@ -18,12 +18,17 @@ public class TeamEvaluator {
 
     // Parallel evaluation
     public Map<Team, TeamIssues> evaluateTeams(List<Team> teams) {
+        log.info("Starting evaluation of " + teams.size() + " teams...");
 
         ExecutorService executor = Executors.newFixedThreadPool(5);
         List<Future<Map.Entry<Team, TeamIssues>>> results = new ArrayList<>();
 
         for (Team t : teams) {
-            results.add(executor.submit(() -> Map.entry(t, evaluate(t))));
+            results.add(executor.submit(() -> {
+                TeamIssues issues = evaluate(t);
+                log.fine("Evaluated team: " + t.getName() + ", issues: " + issues.messages);
+                return Map.entry(t, issues);
+            }));
         }
 
         Map<Team, TeamIssues> issuesMap = new HashMap<>();
@@ -33,17 +38,19 @@ public class TeamEvaluator {
                 var entry = f.get();
                 issuesMap.put(entry.getKey(), entry.getValue());
             } catch (Exception e) {
+                log.severe("Error evaluating team: " + e.getMessage());
                 e.printStackTrace();
             }
         }
 
         executor.shutdown();
+        log.info("Completed evaluation of teams.");
         return issuesMap;
     }
 
     // Return structured issues
     public TeamIssues evaluate(Team team) {
-        log.fine("Evaluating " + team.getName());
+//        log.fine("Evaluating " + team.getName());
 
         var issues = new TeamIssues();
 
@@ -94,5 +101,10 @@ public class TeamEvaluator {
     public boolean teamValidator(Team team) {
         TeamIssues issues = evaluate(team);
         return !issues.hasIssues();
+    }
+
+    public boolean allTeamsValid(List<Team> teams){
+        Map<Team, TeamIssues> result = evaluateTeams(teams);
+        return result.values().stream().noneMatch(TeamIssues::hasIssues);
     }
 }

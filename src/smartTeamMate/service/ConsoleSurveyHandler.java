@@ -6,11 +6,13 @@ import smartTeamMate.model.Role;
 
 import java.util.List;
 import java.util.Scanner;
+import java.util.logging.Logger;
 
 public class ConsoleSurveyHandler implements SurveyHandler {
     private final Scanner sc;
     private final SurveyValidator validator;
     private final PersonalityClassifier classifier;
+    private static final Logger log = Logger.getLogger(ConsoleSurveyHandler.class.getName());
 
     public ConsoleSurveyHandler(Scanner sc, SurveyValidator validator, PersonalityClassifier classifier) {
         this.sc = sc;
@@ -32,7 +34,8 @@ public class ConsoleSurveyHandler implements SurveyHandler {
         List<Integer> answers = validator.runQuestions();
 
         ClassificationResult result = classifier.typeClassifier(answers);
-
-        return new Player(name,id,email,preferredGame,skillLevel,preferredRole,result.getTotalScore(),result.getClassificationType());
+        Player player = new Player(name,id,email,preferredGame,skillLevel,preferredRole,result.getTotalScore(),result.getClassificationType());
+        log.info("Survey completed. Player created: " + player);
+        return player;
     }
 }
