@@ -168,8 +168,22 @@ public class AppController {
     private void displayPlayerSaveSuccess(Player player) {
         System.out.println("===================================================");
         System.out.println("\nPlayer saved successfully!");
-        System.out.println("Personality type: " + player.getPersonalityType());
+        displayPlayerScore(player);
         System.out.println("\n===================================================");
+    }
+
+    private void displayPlayerScore(Player player) {
+        while(true) {
+            System.out.print("Do you want to see your score and type(y/n):: ");
+            char input = scanner.next().toLowerCase().charAt(0);
+            if (input == 'y' || input == 'n') {
+                if(input == 'y') {
+                    System.out.println("\nPersonality Score: " + player.getPersonalityScore());
+                    System.out.println("Personality Type: " + player.getPersonalityType());
+                }
+                break;
+            }
+        }
     }
 
     private void handleTeamFormationFlow() {

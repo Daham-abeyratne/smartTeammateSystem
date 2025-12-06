@@ -5,16 +5,16 @@ import smartTeamMate.model.Team;
 
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.stream.Collectors;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * SkillBalancer (Final Version)
+ * SkillBalancer (patched)
  *
  * - Multi-threaded skill tightening
- * - Tries randomized same-personality swaps
- * - Faster convergence using parallel workers
- * - Does NOT violate TeamRules (because TeamBalancer checks that)
+ * - Atomic team swaps using double-locked swap-by-index
+ * - Defensive null checks
+ * - Revert logic on failure to prevent duplicates
  */
 public class SkillBalancer {
 
@@ -74,7 +74,8 @@ public class SkillBalancer {
                 }
             }
         } catch (Exception e) {
-            log.warning("Skill tightening encountered an exception: " + e.getMessage());
+            // Log full stacktrace to find NPE origin
+            log.log(Level.WARNING, "Skill tightening encountered an exception", e);
         }
 
         log.info("Skill tightening completed. Final skill range: " + getSkillRange(teams));
@@ -100,7 +101,7 @@ public class SkillBalancer {
     }
 
     /**
-     * Try random swap between two teams.
+     * Try random swap between two teams — safe, atomic, and defensive.
      */
     private boolean tryRandomSwap(List<Team> teams, Random r) {
         if (teams.size() < 2) return false;
@@ -109,37 +110,126 @@ public class SkillBalancer {
         Team t2 = teams.get(r.nextInt(teams.size()));
         if (t1 == t2) return false;
 
-        if (t1.getMembers().isEmpty() || t2.getMembers().isEmpty()) return false;
+        List<Player> m1 = t1.getMembers();
+        List<Player> m2 = t2.getMembers();
 
-        Player p1 = t1.getMembers().get(r.nextInt(t1.getMembers().size()));
-        Player p2 = t2.getMembers().get(r.nextInt(t2.getMembers().size()));
+        if (m1.isEmpty() || m2.isEmpty()) return false;
 
-        // must match personality
-        if (!p1.getPersonalityType().equalsIgnoreCase(p2.getPersonalityType())) return false;
+        Player p1 = m1.get(r.nextInt(m1.size()));
+        Player p2 = m2.get(r.nextInt(m2.size()));
+
+        // Defensive checks to avoid NPEs
+        if (p1 == null || p2 == null) return false;
+        String pt1 = p1.getPersonalityType();
+        String pt2 = p2.getPersonalityType();
+        if (pt1 == null || pt2 == null) return false;
+        if (!pt1.equalsIgnoreCase(pt2)) return false;
 
         double before = Math.abs(t1.getTotalSkillAvg() - t2.getTotalSkillAvg());
 
-        synchronized (this) {
-            t1.swapPlayers(p1,p2);
-            t2.swapPlayers(p2,p1);
-        }
+        // Acquire locks for both teams in consistent order to avoid deadlock
+        Object lockA = getLockForTeams(t1, t2)[0];
+        Object lockB = getLockForTeams(t1, t2)[1];
 
-        double after = Math.abs(t1.getTotalSkillAvg() - t2.getTotalSkillAvg());
+        // We'll perform swap by replacing elements at indices (atomic at list level)
+        try {
+            synchronized (lockA) {
+                synchronized (lockB) {
 
-        // If swap is worse, revert
-        if (after > before) {
-            synchronized (this) {
-                t1.swapPlayers(p2,p1);
-                t2.swapPlayers(p1,p2);
+                    int idx1 = m1.indexOf(p1);
+                    int idx2 = m2.indexOf(p2);
+
+                    // sanity check: if an index has changed concurrently, abort
+                    if (idx1 < 0 || idx2 < 0) return false;
+
+                    // perform swap by index — atomic w.r.t lists (single set ops)
+                    try {
+                        m1.set(idx1, p2);
+                        m2.set(idx2, p1);
+                    } catch (RuntimeException re) {
+                        // try to revert if partial failure (very unlikely for arraylist set)
+                        log.log(Level.WARNING, "Runtime exception during index-set swap, attempting revert", re);
+                        // attempt revert safely if possible
+                        if (m1.size() > idx1 && m1.get(idx1) == p2) m1.set(idx1, p1);
+                        if (m2.size() > idx2 && m2.get(idx2) == p1) m2.set(idx2, p2);
+                        throw re;
+                    }
+                }
+            }
+
+            double after = Math.abs(t1.getTotalSkillAvg() - t2.getTotalSkillAvg());
+
+            // If swap is worse, revert (also locked)
+            if (after > before) {
+                synchronized (lockA) {
+                    synchronized (lockB) {
+                        int idx1 = m1.indexOf(p2); // p2 should be at idx1 now
+                        int idx2 = m2.indexOf(p1);
+                        if (idx1 >= 0) m1.set(idx1, p1);
+                        if (idx2 >= 0) m2.set(idx2, p2);
+                    }
+                }
+                return false;
+            }
+
+            log.fine("Swap improved skill difference: " + before + " → " + after);
+            return true;
+
+        } catch (Exception e) {
+            log.log(Level.WARNING, "Swap failed and was safely aborted", e);
+            // If exception occurred, we attempt best-effort revert inside synchronized block
+            try {
+                synchronized (lockA) {
+                    synchronized (lockB) {
+                        if (m1.contains(p1) && !m2.contains(p2)) {
+                            // already consistent
+                        } else {
+                            // restore by ensuring each team has correct player once if possible
+                            if (!m1.contains(p1)) {
+                                m1.add(p1);
+                            }
+                            if (!m2.contains(p2)) {
+                                m2.add(p2);
+                            }
+                            // remove any duplicates
+                            removeExtraInstances(m1, p2, p1);
+                            removeExtraInstances(m2, p1, p2);
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.log(Level.SEVERE, "Failed to revert after exception — manual inspection required", ex);
             }
             return false;
         }
+    }
 
-        log.fine("Swap improved skill difference: " + before + " → " + after);
-        return true;
+    /** remove extra instances of old/new in list leaving only the wanted element */
+    private void removeExtraInstances(List<Player> list, Player toRemoveIfDuplicate, Player desired) {
+        // remove any accidental duplicates of toRemoveIfDuplicate, but keep one desired for desired
+        while (Collections.frequency(list, toRemoveIfDuplicate) > 0 && list.contains(desired)) {
+            list.remove(toRemoveIfDuplicate);
+        }
+    }
+
+    /**
+     * Determine lock ordering deterministically to avoid deadlocks.
+     * Returns array [firstLock, secondLock]
+     */
+    private Object[] getLockForTeams(Team a, Team b) {
+        // use identityHashCode for deterministic order
+        int ha = System.identityHashCode(a);
+        int hb = System.identityHashCode(b);
+        if (ha < hb) return new Object[]{a, b};
+        if (ha > hb) return new Object[]{b, a};
+        // rare collision; fall back to tie-breaker using System.nanoTime (but keep deterministic-ish)
+        // but better: use object toString comparator
+        if (a.toString().compareTo(b.toString()) <= 0) return new Object[]{a, b};
+        return new Object[]{b, a};
     }
 
     private double getSkillRange(List<Team> teams) {
+        if (teams == null || teams.isEmpty()) return 0.0;
         DoubleSummaryStatistics stat = teams.stream()
                 .mapToDouble(Team::getTotalSkillAvg)
                 .summaryStatistics();
