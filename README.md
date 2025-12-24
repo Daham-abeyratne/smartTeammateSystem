@@ -111,9 +111,3 @@ System behavior and structure are documented using:
 - **Data Handling:** CSV files  
 
 ---
-
-## Example Usage
-
-```java
-TeamBuilder builder = new TeamBuilder(rules, evaluator, skillBalancer);
-List<Team> teams = builder.buildTeams(players, 4);
